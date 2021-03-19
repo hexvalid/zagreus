@@ -4,6 +4,8 @@ import QtQuick.Controls 2.15
 
 Item {
     property int status
+    property string ip
+
     signal connect
     signal disconnect
     signal reconnect
@@ -81,6 +83,17 @@ Item {
         x:25
         y:230
         active: true
+    }
+
+    Text {
+        id: text2
+        x: 0
+        y: 313
+        width: 100
+        height: 13
+        text: ip
+        font.pixelSize: 15
+        horizontalAlignment: Text.AlignHCenter
     }
 }
 

@@ -18,7 +18,6 @@ int main(int argc, char *argv[])
 {
 
 
-
     qDebug() << "start";
 
     Router router1,router2,router3,router4,router5;

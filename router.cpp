@@ -1,6 +1,16 @@
 #include "router.h"
 #include "QDebug"
 #include "QObject"
+#include "QTime"
+#include <QRegularExpression>
+#include <QNetworkConfigurationManager>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+
+
+
+
+#include <curl/curl.h>
 
 #include <csignal>
 
@@ -8,7 +18,8 @@
 
 Router::Router(QObject *parent) : QObject(parent)
 {
-    this->setStatus(ConnectionStatus::NOT_RUNNING);
+    this->setStatus(ConnectionStatus::IDLE);
+    this->setConProgress(0);
     this->process = new QProcess;
     QObject::connect(process, SIGNAL(started()), this,SLOT(listenProcessStarted()));
     QObject::connect(process, SIGNAL(readyRead()),this, SLOT(listenProcessReadyRead()));
@@ -22,7 +33,7 @@ void Router::connect()
         this->m_reconnect=false;
     }
 
-    this->setStatus(ConnectionStatus::CONNECTING_0);
+    this->setConProgress(0);
 
     qDebug() << "connecting";
 
@@ -53,14 +64,14 @@ void Router::connect()
          << "--ca" << "ca.txt"
          << "--cert" << "cert.txt"
          << "--key" << "key.txt"
-          <<"--connect-retry"<<"0"
+         <<"--connect-retry"<<"1"
          << "--verb" << "3";
 
 
 
     //connect(process, &QProcess::start, this, SLOT(listenProcessStatus);
 
-    process->setWorkingDirectory("/home/user/QtProjects/zagreus/stub");
+    process->setWorkingDirectory("/home/user/stub");
 
 
     process->setProgram(binPath);
@@ -69,18 +80,17 @@ void Router::connect()
 
     process->start();
 
+    this->setStatus(ConnectionStatus::CONNECTING);
+    this->setConProgress(0.01);
 }
 
 void Router::reconnect(){
-    disconnect();
-
-    this->m_reconnect=true;
-
-
+     this->disconnect();
+     this->m_reconnect=true;
 }
 
 void Router::disconnect(){
-    if (this->m_status!=ConnectionStatus::NOT_RUNNING){
+    if (this->m_status!=ConnectionStatus::DISCONNECTING){
         kill(process->processId(), SIGINT);
     }
 }
@@ -90,51 +100,177 @@ void Router::listenProcessReadyRead()
 {
     while(process->canReadLine()){
         QString line =  process->readLine();
-        if (line.contains("process restarting")){
-            this->setStatus(ConnectionStatus::CONNECTING_0);
-        }
-        else if (line.contains("Attempting to establish TCP connection")){
-            this->setStatus(ConnectionStatus::CONNECTING_1);
+        if (line.contains("Attempting to establish TCP")){
+            this->setConProgress(0.02);
         }
         else if (line.contains("TCP connection established with")){
-            this->setStatus(ConnectionStatus::CONNECTING_2);
+            this->setConProgress(0.03);
         }
-        else if (line.contains("Initial packet from")){
-            this->setStatus(ConnectionStatus::CONNECTING_3);
+        else if (line.contains("SOCKS proxy wants us to send UDP")){
+            this->setConProgress(0.13);
         }
-        else if (line.contains("VERIFY EKU OK")){
-            this->setStatus(ConnectionStatus::CONNECTING_4);
+        else if (line.contains("UDPv4 link remote")){
+            this->setConProgress(0.23);
         }
-        else if (line.contains("Peer Connection Initiated with")){
-            this->setStatus(ConnectionStatus::CONNECTING_5);
+        else if (line.contains("TLS: Initial packet")){
+            this->setConProgress(0.27);
+        }
+        else if (line.contains("VERIFY EKU")){
+            this->setConProgress(0.31);
+        }
+        else if (line.contains("Peer Connection Initiated")){
+            this->setConProgress(0.39);
+        }
+        else if (line.contains("PUSH_REQUEST")){
+            this->setConProgress(0.85);
+        }
+        else if (line.contains("PUSH: Received control message")){
+            this->setConProgress(0.88);
+            this->parsePushReply(line);
+            this->setConProgress(0.89);
         }
         else if (line.contains("Initialization Sequence Completed")){
             this->setStatus(ConnectionStatus::CONNECTED);
+            this->setConProgress(1.0);
+            checkIP();
         }
         else if (line.contains("Interrupted system call")){
             this->setStatus(ConnectionStatus::DISCONNECTING);
+            this->setConProgress(0.01);
         }
 
-        qDebug() <<"çıktı:"<<this->m_tunNumber<<":" << line;
+        qDebug() <<"çıktı:" << QDateTime::currentDateTime().toString("mm:sszzz") <<this->m_tunNumber<<":" << line;
     }
+}
+
+
+
+
+void Router::checkIP(){
+
+    qDebug()<<"CHECKING";
+
+    QNetworkAccessManager *manager = new QNetworkAccessManager(this);
+
+
+
+
+    QNetworkConfigurationManager config_manager;
+    QList<QNetworkConfiguration> configs = config_manager.allConfigurations();
+    bool found_interface = false;
+    QString desired_interface_name("tun11");
+    foreach (const QNetworkConfiguration &config, configs) {
+        if (config.name() == desired_interface_name) {
+            found_interface = true;
+            QNetworkAccessManager *network_access_manager = new QNetworkAccessManager;
+            network_access_manager->setConfiguration(config);
+
+
+
+
+            QNetworkRequest request;
+            request.setUrl(QUrl("http://checkip.amazonaws.com"));
+            manager->get(request);
+
+
+
+//            size_t WriteCallback(char *contents, size_t size, size_t nmemb, void *userp)
+//            {
+//                ((std::string *)userp)->append((char *)contents, size * nmemb);
+//                return size * nmemb;
+//            }
+
+//            void run(int i)
+//            {
+//                CURL *curl;
+
+//                curl = curl_easy_init(); //0.686166 ms
+//                CURLcode res;
+//                auto aa = QString().asprintf("tun%d", i);
+
+//                std::string readBuffer;
+
+//                curl_easy_setopt(curl, CURLOPT_URL, "http://checkip.amazonaws.com/");
+//                curl_easy_setopt(curl, CURLOPT_INTERFACE, aa.toStdString().c_str());
+//                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+//                curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+//                // to this:  0.053129 ms
+
+//                /* Perform the request, res will get the return code */
+//                res = curl_easy_perform(curl); //645.075 ms
+
+//                /* Check for errors */
+//                if (res == CURLE_OK) {
+//                    long response_code;
+//                    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+//                    qDebug() << response_code;
+//                    qDebug() << QString().fromStdString(readBuffer);
+//                }
+
+//                /* always cleanup */
+//                curl_easy_cleanup(curl); //0.957674 ms
+//            }
+
+            break;
+        }
+    }
+    if (!found_interface) {
+        //we failed to find the interface!
+    }
+
+
+
+
+
+    this->setNetActing(false);
+
+}
+
+void replyFinished(QNetworkReply *resp){
+    QVariant status_code = resp->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+
+        // Print or catch the status code
+        QString status = status_code.toString(); // or status_code.toInt();
+        qDebug() << status;
+
 }
 
 void Router::listenProcessStarted()
 {
     qDebug()<<"process->started";
+    emit pidChanged();
+    emit processIsRunningChanged();
 }
 
 
 void Router::listenProcessFinished(int exitCode)
 {
     qDebug()<<"process-> finished"<<exitCode;
-    this->setStatus(ConnectionStatus::NOT_RUNNING);
-
+    this->setStatus(ConnectionStatus::IDLE);
+    this->setConProgress(0);
 
     if (m_reconnect){
 
         this->connect();
     }
+    emit processIsRunningChanged();
+
+}
+
+void Router::parsePushReply(QString line){
+
+    QRegularExpression peerRegex("(?<=peer-id )([0-9]+)(?=,)");
+    this->m_peer = peerRegex.match(line).captured(1).toInt();
+
+    QRegularExpression gatewayRegex("(?<=route-gateway )((?:[0-9]{1,3}.){3}[0-9]{1,3}+)(?=,)");
+    this->m_gateway = gatewayRegex.match(line).captured(1);
+
+    QRegularExpression localRegex("(?<=ifconfig )((?:[0-9]{1,3}.){3}[0-9]{1,3}+)(?= )");
+    this->m_local = localRegex.match(line).captured(1);
+
+    emit pushReplyParsed();
 
 }
 

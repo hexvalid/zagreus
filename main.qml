@@ -27,6 +27,7 @@ Window {
         onConnect: Router2.connect()
         onDisconnect: Router2.disconnect()
         onReconnect: Router2.reconnect()
+
     }
 
     Indicator {
@@ -38,6 +39,7 @@ Window {
         onConnect: Router3.connect()
         onDisconnect: Router3.disconnect()
         onReconnect: Router3.reconnect()
+
     }
 
     Indicator {
@@ -49,6 +51,7 @@ Window {
         onConnect: Router4.connect()
         onDisconnect: Router4.disconnect()
         onReconnect: Router4.reconnect()
+
     }
 
     Indicator {
@@ -61,6 +64,34 @@ Window {
         onDisconnect: Router5.disconnect()
         onReconnect: Router5.reconnect()
     }
+
+    Rectangle {
+        x: 0
+        y: 457
+        width: 1024
+        height: 143
+        color: "#282a36"
+
+        RouterDeck {
+            id: deck1
+            x: 8
+            y: 5
+            no: 1
+            conProgress: Router1.conProgress
+            status:  Router1.getStatus
+            pid: Router1.pid
+            processIsRunning: Router1.processIsRunning
+            peer: Router1.peer
+            gateway: Router1.gateway
+            local: Router1.local
+            remote: Router1.remote
+            netActing: Router1.netActing
+
+        }
+    }
+
+
+
 
 
 
@@ -77,5 +108,9 @@ Window {
     //    DISCONNECTING=10,
     //    ERROR=11,
 }
+
+
+
+
 
 

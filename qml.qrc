@@ -2,5 +2,6 @@
     <qresource prefix="/">
         <file>main.qml</file>
         <file>Indicator.qml</file>
+        <file>RouterDeck.qml</file>
     </qresource>
 </RCC>
